@@ -1,18 +1,24 @@
+from datetime import datetime
+import uuid
+
 from prefect import flow
-from utils import load_csv, fetch_data_from_api, process_api_data, save_data_to_json, send_telegram_message
+from prefect.task_runners import ThreadPoolTaskRunner
+
+from config import CSV_FILE_PATH, OUTPUT_DIR, CSV_FILE_SEP
+from utils import fetch_data_from_api, process_api_data, save_data_to_json, send_telegram_message, load_csv
 
 
-@flow
-def data_processing_flow(csv_file_path: str, output_dir: str):
-    df = load_csv(csv_file_path)
+@flow(task_runner=ThreadPoolTaskRunner(max_workers=3))
+def data_processing_flow():
+    df = load_csv(CSV_FILE_PATH, CSV_FILE_SEP)
 
     for idx, row in df.iterrows():
         api_data = fetch_data_from_api(row)
         data, meta_data = process_api_data(api_data)
-        save_data_to_json(data, meta_data, output_dir, f"result_{idx}")
+        save_data_to_json(data, meta_data, OUTPUT_DIR, f"{datetime.now()}-{uuid.uuid4()}")
 
     send_telegram_message("Flow completed!")
 
 
 if __name__ == "__main__":
-    data_processing_flow("data/CSV.csv", "outputs/")
+    data_processing_flow.serve(name="data-processing-deployment")
